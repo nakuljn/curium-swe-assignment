@@ -28,7 +28,6 @@ class ToolService:
             query_parts.append(f'recall_initiation_date:[{input_data.year}0101 TO {input_data.year}1231]')
         
         if input_data.query:
-            # Sanitize query by escaping quotes for Lucene syntax
             clean_query = input_data.query.replace('"', '\\"')
             query_parts.append(f'(product_description:"{clean_query}" OR reason_for_recall:"{clean_query}")')
 
@@ -71,7 +70,6 @@ class ToolService:
                     if year.isdigit():
                         by_year[year] = by_year.get(year, 0) + entry.get("count", 0)
             
-            # Sort years descending
             by_year_sorted = [{"year": k, "count": v} for k, v in sorted(by_year.items(), key=lambda item: item[0], reverse=True)]
 
             stats = {
