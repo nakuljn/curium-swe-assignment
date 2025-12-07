@@ -7,21 +7,21 @@ class OpenFDAClient:
         self.base_url = os.getenv("OPENFDA_API_URL", "https://api.fda.gov/drug/enforcement.json")
     
     def _build_params(self, limit, skip, count, search):
-        params = []
+        params = {}
         if limit != -1:
-            params.append(f"limit={limit}")
+            params["limit"] = limit
         if skip != -1:
-            params.append(f"skip={skip}")
+            params["skip"] = skip
         if count:
-            params.append(f"count={count}")
+            params["count"] = count
         if search:
-            params.append(f"search={search}")
-        return "?" + "&".join(params) if params else ""
+            params["search"] = search
+        return params
     
     def fetch_recalls(self, limit=-1, skip=-1, count=None, search=""):
-        url = self.base_url + self._build_params(limit, skip, count, search)
+        params = self._build_params(limit, skip, count, search)
         try:
-            response = requests.get(url)
+            response = requests.get(self.base_url, params=params)
             response.raise_for_status()
             return response.json()
         except requests.RequestException as e:

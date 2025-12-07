@@ -4,6 +4,7 @@ import json
 import logging
 from openai import OpenAI
 from dotenv import load_dotenv
+import uuid
 
 from tools import ToolService
 
@@ -19,31 +20,80 @@ st.markdown("""
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap');
     * { font-family: 'Inter', sans-serif; }
     .stApp { background: #0d1117; }
-    #MainMenu, footer, header { visibility: hidden; }
-    section[data-testid="stSidebar"] { background: #161b22; border-right: 1px solid #30363d; }
+    
+    /* Hide MainMenu and Footer, but keep Header visible for Sidebar toggle */
+    #MainMenu { display: none; }
+    header { visibility: visible; background: transparent; }
+    footer { visibility: hidden; }
+
+    /* Sidebar Styling */
+    section[data-testid="stSidebar"] { 
+        background-color: #0d1117; 
+        border-right: 1px solid #30363d;
+    }
+    
+    /* General Text in Sidebar */
     section[data-testid="stSidebar"] h1, section[data-testid="stSidebar"] h3, 
     section[data-testid="stSidebar"] h5, section[data-testid="stSidebar"] p,
-    section[data-testid="stSidebar"] span { color: #c9d1d9 !important; }
+    section[data-testid="stSidebar"] span { color: #e6edf3 !important; }
+
+    /* Sidebar Buttons (Conversation List) */
     section[data-testid="stSidebar"] .stButton > button {
-        background: #21262d; border: 1px solid #30363d; color: #c9d1d9;
-        border-radius: 6px; padding: 8px 16px; margin: 2px 0; font-size: 14px;
+        background: transparent; 
+        border: none; 
+        color: #e6edf3;
+        border-radius: 6px; 
+        padding: 8px 12px; 
+        margin: 2px 0; 
+        font-size: 14px;
+        text-align: left;
+        width: 100%;
+        transition: background 0.2s;
+        display: flex;
+        justify-content: flex-start;
     }
-    section[data-testid="stSidebar"] .stButton > button:hover { background: #30363d; }
+    
+    section[data-testid="stSidebar"] .stButton > button:hover { 
+        background: #161b22; 
+        border: 1px solid #30363d;
+    }
+    
+    /* Primary Button (New Chat) */
     section[data-testid="stSidebar"] .stButton > button[kind="primary"] {
-        background: linear-gradient(135deg, #238636, #2ea043); border: none; color: #fff; font-weight: 600;
+        background: #238636; 
+        border: 1px solid rgba(240,246,252,0.1); 
+        color: #ffffff; 
+        font-weight: 500;
+        justify-content: center;
     }
-    .stChatMessage { background: #161b22; border: 1px solid #30363d; border-radius: 12px; padding: 16px 20px; margin: 12px 0; }
-    [data-testid="stChatMessageContent"] p { color: #e6edf3 !important; line-height: 1.6; font-size: 15px; }
+    section[data-testid="stSidebar"] .stButton > button[kind="primary"]:hover {
+        background: #2ea043;
+        border-color: #8b949e;
+    }
+
+    /* Chat Interface */
+    .stChatMessage { background: transparent; border: none; padding: 10px 0; }
+    [data-testid="stChatMessageContent"] { background: transparent !important; }
+    [data-testid="stChatMessageContent"] p { color: #e6edf3 !important; line-height: 1.6; font-size: 16px; }
+    
+    /* Input Area */
     .stChatInput > div { background: #161b22; border: 1px solid #30363d; border-radius: 12px; }
     .stChatInput input { color: #e6edf3 !important; }
+    
+    /* Headings */
     h1, h2, h3, h4, h5 { color: #e6edf3 !important; }
-    .stStatus, .stExpander { background: rgba(35,134,54,0.08); border: 1px solid rgba(35,134,54,0.3); border-radius: 8px; }
-    .stExpander summary { color: #58a6ff !important; }
+    
+    /* Status & Expanders */
+    .stStatus, .stExpander { background: #161b22; border: 1px solid #30363d; border-radius: 8px; }
+    .stExpander summary { color: #8b949e !important; }
+    
     hr { border-color: #30363d; }
-    .welcome-box { text-align: center; padding: 60px 20px; max-width: 600px; margin: 0 auto; }
-    .welcome-icon { font-size: 56px; margin-bottom: 16px; }
-    .welcome-title { font-size: 26px; font-weight: 600; color: #e6edf3; margin-bottom: 8px; }
-    .welcome-sub { font-size: 15px; color: #8b949e; margin-bottom: 32px; line-height: 1.5; }
+    
+    /* Welcome Screen */
+    .welcome-box { text-align: center; padding: 80px 20px; max-width: 600px; margin: 0 auto; }
+    .welcome-icon { font-size: 48px; margin-bottom: 24px; opacity: 0.8; }
+    .welcome-title { font-size: 28px; font-weight: 600; color: #e6edf3; margin-bottom: 12px; }
+    .welcome-sub { font-size: 16px; color: #8b949e; margin-bottom: 40px; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -55,11 +105,7 @@ if "conversations" not in st.session_state:
     st.session_state.current_conv_id = None
 
 api_key = os.getenv("OPENAI_API_KEY")
-if not api_key:
-    st.error("🔑 OPENAI_API_KEY not found")
-    st.stop()
-
-client = OpenAI(api_key=api_key)
+client = OpenAI(api_key=api_key) if api_key else None
 
 INSTRUCTIONS = """You are a strictly dedicated FDA Drug Recall Assistant.
 Your ONLY purpose is to query FDA recall data using the provided tools: 'search_recalls' and 'get_recall_stats'.
@@ -71,9 +117,7 @@ PROTOCOL:
    - THEN, state if any recalls were found or not.
    - FINALLY, you MUST add this disclaimer: "I cannot provide medical advice. Please consult your healthcare provider."
 3. If the user asks a general knowledge question unrelated to drugs/health (e.g., "Capital of France", "Who is the president"), reply ONLY: "No result found."
-4. Do not utilize your internal knowledge base to answer general questions.
-
-Always end your response with a source link: https://api.fda.gov/drug/enforcement.json"""
+4. Do not utilize your internal knowledge base to answer general questions."""
 
 def get_tools():
     return [
@@ -104,6 +148,9 @@ def get_tools():
     ]
 
 def run_agent(user_input, previous_response_id=None):
+    if not client:
+        raise Exception("OPENAI_API_KEY not found. Please set it in your .env file.")
+
     tool_log = []
     
     logger.info(f"[QUERY] {user_input[:50]}...")
@@ -152,7 +199,12 @@ def run_agent(user_input, previous_response_id=None):
     return response.output_text or "", response.id, tool_log
 
 def create_new_conversation():
-    conv_id = f"conv_{len(st.session_state.conversations)}"
+    # Maintain max 10 conversations
+    if len(st.session_state.conversations) >= 10:
+        oldest_key = next(iter(st.session_state.conversations))
+        del st.session_state.conversations[oldest_key]
+
+    conv_id = f"conv_{uuid.uuid4().hex[:8]}"
     st.session_state.conversations[conv_id] = {
         "title": "New Chat",
         "messages": [],

@@ -4,7 +4,7 @@ from typing import Dict, Any, List
 
 from openfda.client import OpenFDAClient
 from openfda.transforms import RecallTransformer
-from function_schemas import SearchRecallsInput, RecallClassification
+from function_schemas import SearchRecallsInput
 
 logger = logging.getLogger(__name__)
 
@@ -25,13 +25,14 @@ class ToolService:
             query_parts.append(f'classification:"{input_data.classification.value}"')
         
         if input_data.year:
-            # Date range filter for the specified year
-            query_parts.append(f'recall_initiation_date:[{input_data.year}0101+TO+{input_data.year}1231]')
+            query_parts.append(f'recall_initiation_date:[{input_data.year}0101 TO {input_data.year}1231]')
         
         if input_data.query:
-            query_parts.append(f'(product_description:"{input_data.query}"+OR+reason_for_recall:"{input_data.query}")')
+            # Sanitize query by escaping quotes for Lucene syntax
+            clean_query = input_data.query.replace('"', '\\"')
+            query_parts.append(f'(product_description:"{clean_query}" OR reason_for_recall:"{clean_query}")')
 
-        search_query = "+AND+".join(query_parts) if query_parts else ""
+        search_query = " AND ".join(query_parts) if query_parts else ""
 
         try:
             raw_data = self.client.search_enforcements(
@@ -60,10 +61,24 @@ class ToolService:
             # 3. Top recalling firms
             firm_counts = self.client.count_enforcements("recalling_firm.exact")
 
+            # 4. Recalls by year (aggregated from date counts)
+            date_counts = self.client.count_enforcements("recall_initiation_date")
+            by_year = {}
+            if date_counts and "results" in date_counts:
+                for entry in date_counts["results"]:
+                    # entry['term'] is YYYYMMDD, take first 4 chars for year
+                    year = str(entry.get("term", ""))[:4]
+                    if year.isdigit():
+                        by_year[year] = by_year.get(year, 0) + entry.get("count", 0)
+            
+            # Sort years descending
+            by_year_sorted = [{"year": k, "count": v} for k, v in sorted(by_year.items(), key=lambda item: item[0], reverse=True)]
+
             stats = {
                 "by_classification": class_counts.get("results", []) if class_counts else [],
                 "by_status": status_counts.get("results", []) if status_counts else [],
-                "top_firms": firm_counts.get("results", [])[:5] if firm_counts else []
+                "top_firms": firm_counts.get("results", [])[:5] if firm_counts else [],
+                "by_year": by_year_sorted
             }
             
             return json.dumps(stats)

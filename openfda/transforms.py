@@ -18,8 +18,7 @@ class RecallTransformer:
             return None
 
     def transform_many(self, data: List[Dict[str, Any]]) -> List[RecallRecord]:
-        results = []
-        for item in data:
-            if record := self.transform_one(item):
-                results.append(record)
-        return results
+        return [
+            record for item in data
+            if (record := self.transform_one(item)) is not None
+        ]
