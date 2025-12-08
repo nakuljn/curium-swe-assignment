@@ -8,7 +8,6 @@ A specialized AI assistant that helps users query the FDA Drug Enforcement (Reca
 - 📊 **Statistics**: Get summaries of recalls by classification, status, and top recalling firms.
 - 🧠 **Context Aware**: Remembers conversation history (e.g., "Tell me more about the first one").
 - 🛡️ **Guardrails**: Strictly dedicated to FDA data; refuses off-topic queries.
-- 🔗 **Citations**: Always links to the OpenFDA source.
 
 ## Tech Stack
 
